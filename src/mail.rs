@@ -5,6 +5,7 @@ use lettre::smtp::authentication::Credentials;
 use lettre_email::EmailBuilder;
 
 use crate::MailConfig;
+use crate::CONFIG;
 
 use crate::api::EmptyResult;
 use crate::error::Error;
@@ -61,5 +62,33 @@ pub fn send_password_hint(address: &str, hint: Option<String>, config: &MailConf
     mailer(config)
         .send(email.into())
         .map_err(|e| Error::new("Error sending hint email", e.to_string()))
+        .and(Ok(()))
+}
+
+pub fn send_invite(address: &str, org_id: &str, org_user_id: &str, token: &str, org_name: &str, config: &MailConfig) -> EmptyResult {
+    let (subject, body) =  {
+        (format!("Join {}", &org_name),
+        format!(
+            "<html>
+             <p>You have been invited to join the <b>{}</b> organization.<br><br>
+             <a href=\"{}/#/accept-organization/?organizationId={}&organizationUserId={}&email={}&organizationName={}&token={}\">Click here to join</a></p>
+             <p>If you do not wish to join this organization, you can safely ignore this email.</p>
+             </html>",
+            org_name, CONFIG.domain, org_id, org_user_id, address, org_name, token
+        ))
+    };
+
+    let email = EmailBuilder::new()
+        .to(address)
+        .from((config.smtp_from.clone(), "Bitwarden-rs"))
+        .subject(subject)
+        .header(("Content-Type", "text/html"))
+        .body(body)
+        .build()
+        .map_err(|e| Error::new("Error building invite email", e.to_string()))?;
+
+    mailer(config)
+        .send(email.into())
+        .map_err(|e| Error::new("Error sending invite email", e.to_string()))
         .and(Ok(()))
 }
